@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Counter Control Panel - Queue ERP</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-slate-900 text-white font-sans h-screen flex flex-col justify-between items-center p-6">
+
+    <!-- Header -->
+    <header class="w-full max-w-md flex justify-between items-center border-b border-slate-800 pb-4">
+        <div>
+            <h1 class="text-xl font-bold text-blue-400" id="display-org-name">Counter Operator</h1>
+            <p class="text-xs text-slate-400">Org Code: <span id="display-org" class="font-semibold text-white">Loading...</span></p>
+        </div>
+        <button onclick="handleLogout()" class="text-xs text-red-400 hover:text-red-300 transition bg-slate-950 border border-slate-800 px-3 py-1.5 rounded-lg">
+            <i class="fa-solid fa-right-from-bracket mr-1"></i> Logout
+        </button>
+    </header>
+
+    <!-- Main Counter Display Area -->
+    <main class="w-full max-w-md text-center my-auto">
+        <p class="text-xs uppercase tracking-widest text-slate-400 mb-2 font-semibold">Current Serving Number</p>
+        
+        <!-- Large Number Display -->
+        <div class="bg-slate-950 border border-slate-800 rounded-3xl p-10 shadow-2xl mb-8">
+            <span id="queue-number" class="text-8xl font-black text-emerald-400 tracking-tight">0</span>
+        </div>
+
+        <!-- Controller Buttons -->
+        <div class="grid grid-cols-2 gap-4">
+            <button onclick="changeNumber(-1)" class="bg-slate-800 hover:bg-slate-700 active:scale-95 text-red-400 font-bold py-5 rounded-2xl text-2xl transition border border-slate-700 shadow-lg flex items-center justify-center space-x-2">
+                <i class="fa-solid fa-minus"></i>
+                <span>Previous</span>
+            </button>
+            <button onclick="changeNumber(1)" class="bg-blue-600 hover:bg-blue-500 active:scale-95 text-white font-bold py-5 rounded-2xl text-2xl transition shadow-lg flex items-center justify-center space-x-2">
+                <span>Next Call</span>
+                <i class="fa-solid fa-plus"></i>
+            </button>
+        </div>
+
+        <button onclick="resetNumber()" class="mt-4 w-full bg-slate-800/50 hover:bg-red-950 text-slate-400 hover:text-red-400 text-xs py-3 rounded-xl transition border border-slate-800">
+            <i class="fa-solid fa-rotate-right mr-1"></i> Reset Queue to Zero
+        </button>
+    </main>
+
+    <!-- Footer Status -->
+    <footer class="w-full max-w-md text-center text-xs text-slate-500 border-t border-slate-800 pt-4">
+        Status: <span id="status-text" class="text-emerald-500 font-medium">Connected to Backend</span>
+    </footer>
+
+    <script>
+        // LocalStorage එකෙන් Login වූ ORG Code සහ Session Token ලබා ගැනීම
+        const ORG_CODE = localStorage.getItem('counterOrgCode');
+        const ORG_NAME = localStorage.getItem('counterOrgName');
+        const SESSION_TOKEN = localStorage.getItem('counterSessionToken');
+
+        // Login වී නැත්නම් Login Page එකට යැවීම
+        if (!ORG_CODE || !SESSION_TOKEN) {
+            window.location.href = '../counter-login.html';
+        }
+
+        document.getElementById('display-org').innerText = ORG_CODE;
+        document.getElementById('display-org-name').innerText = ORG_NAME || 'Counter Operator';
+
+        let currentNum = 0;
+
+        // Verify Single Device Session
+        async function verifySession() {
+            try {
+                const res = await fetch('/api/counter/verify-session', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ orgCode: ORG_CODE, sessionToken: SESSION_TOKEN })
+                });
+                const result = await res.json();
+                if (!result.success) {
+                    alert('Session expired! You have logged in from another device.');
+                    handleLogout();
+                }
+            } catch (err) {
+                console.error('Session check error:', err);
+            }
+        }
+
+        // Fetch Queue Number for Logged Org
+        async function loadCurrentQueue() {
+            try {
+                const res = await fetch(`/api/queue/${ORG_CODE}`);
+                const result = await res.json();
+                if (result.success && result.data) {
+                    currentNum = result.data.current_number || 0;
+                    document.getElementById('queue-number').innerText = currentNum;
+                }
+            } catch (err) {
+                document.getElementById('status-text').innerText = 'API Disconnected';
+                document.getElementById('status-text').className = 'text-red-500 font-medium';
+            }
+        }
+
+        // Update Queue Number
+        async function updateQueueAPI(newNumber) {
+            try {
+                const response = await fetch('/api/queue/update', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ orgCode: ORG_CODE, currentNumber: newNumber })
+                });
+                const data = await response.json();
+                if (data.success) {
+                    currentNum = newNumber;
+                    document.getElementById('queue-number').innerText = currentNum;
+                }
+            } catch (err) {
+                alert('Failed to update queue number');
+            }
+        }
+
+        function changeNumber(step) {
+            let nextVal = currentNum + step;
+            if (nextVal < 0) nextVal = 0;
+            updateQueueAPI(nextVal);
+        }
+
+        function resetNumber() {
+            if (confirm('Are you sure you want to reset the queue number to 0?')) {
+                updateQueueAPI(0);
+            }
+        }
+
+        function handleLogout() {
+            localStorage.removeItem('counterOrgCode');
+            localStorage.removeItem('counterOrgName');
+            localStorage.removeItem('counterSessionToken');
+            window.location.href = '../counter-login.html';
+        }
+
+        // Intervals
+        setInterval(loadCurrentQueue, 2000);
+        setInterval(verifySession, 5000); // Check for single device lock every 5s
+        loadCurrentQueue();
+    </script>
+</body>
+</html>

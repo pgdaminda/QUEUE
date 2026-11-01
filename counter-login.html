@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Counter Login - Queue ERP</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-950 text-white font-sans min-h-screen flex items-center justify-center p-4">
+
+    <div class="bg-slate-900 border border-slate-800 p-8 rounded-2xl shadow-2xl w-full max-w-md">
+        <div class="text-center mb-6">
+            <h1 class="text-2xl font-bold text-blue-400">Counter Operator Login</h1>
+            <p class="text-xs text-slate-400 mt-1">Enter your Organization Code and Password</p>
+        </div>
+
+        <div id="error-msg" class="bg-red-500/20 border border-red-500 text-red-400 p-3 rounded-xl mb-4 text-xs hidden"></div>
+
+        <form onsubmit="handleCounterLogin(event)">
+            <div class="mb-4">
+                <label class="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">Organization Code (ORG NO)</label>
+                <input type="text" id="orgCode" required placeholder="e.g. ORG001" 
+                       class="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-white focus:outline-none focus:border-blue-500 font-mono">
+            </div>
+
+            <div class="mb-6">
+                <label class="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">Password</label>
+                <input type="password" id="password" required placeholder="Enter password" 
+                       class="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-white focus:outline-none focus:border-blue-500">
+            </div>
+
+            <button type="submit" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold p-3.5 rounded-xl transition shadow-lg">
+                Login to Counter
+            </button>
+        </form>
+    </div>
+
+    <script>
+        async function handleCounterLogin(event) {
+            event.preventDefault();
+            const orgCode = document.getElementById('orgCode').value.trim();
+            const password = document.getElementById('password').value;
+            const errorDiv = document.getElementById('error-msg');
+
+            try {
+                const res = await fetch('/api/counter/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ orgCode, password })
+                });
+
+                const result = await res.json();
+                if (result.success) {
+                    // Save session data to localStorage
+                    localStorage.setItem('counterOrgCode', result.orgCode);
+                    localStorage.setItem('counterOrgName', result.orgName);
+                    localStorage.setItem('counterSessionToken', result.sessionToken);
+
+                    // Redirect to Counter Control Panel inside pages folder
+                    window.location.href = 'pages/counter.html';
+                } else {
+                    errorDiv.innerText = result.message;
+                    errorDiv.classList.remove('hidden');
+                }
+            } catch (err) {
+                errorDiv.innerText = 'Connection error. Please try again.';
+                errorDiv.classList.remove('hidden');
+            }
+        }
+    </script>
+</body>
+</html>

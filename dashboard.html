@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Queue Management ERP - Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-gray-100 font-sans flex h-screen overflow-hidden">
+
+    <!-- 1. Dark Left Sidebar -->
+    <aside class="w-64 bg-slate-900 text-white flex flex-col justify-between shrink-0">
+        <div>
+            <!-- ERP Title / Logo Header -->
+            <div class="h-16 flex items-center px-6 bg-slate-950 font-bold text-lg tracking-wide border-b border-slate-800">
+                <i class="fa-solid font-layer-group text-blue-500 mr-3 text-xl"></i>
+                <span>QUEUE ERP SYSTEM</span>
+            </div>
+
+            <!-- Navigation Links -->
+            <nav class="mt-6 px-3 space-y-1">
+                <a href="#" onclick="showSection('dashboard')" class="flex items-center px-4 py-3 text-sm font-medium rounded-lg bg-blue-600 text-white transition">
+                    <i class="fa-solid fa-chart-line w-6"></i> Main Dashboard
+                </a>
+                
+                <a href="#" onclick="showSection('organizations')" class="flex items-center px-4 py-3 text-sm font-medium rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition">
+                    <i class="fa-solid fa-building w-6"></i> Organizations
+                </a>
+
+                <a href="#" onclick="showSection('users')" class="flex items-center px-4 py-3 text-sm font-medium rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition">
+                    <i class="fa-solid fa-users-gear w-6"></i> Manage Users
+                </a>
+            </nav>
+        </div>
+
+        <!-- Sidebar Footer -->
+        <div class="p-4 border-t border-slate-800 text-xs text-slate-400 text-center">
+            Queue System v1.0
+        </div>
+    </aside>
+
+    <!-- 2. Main Content Area -->
+    <div class="flex-1 flex flex-col overflow-y-auto">
+
+        <!-- Top Header Bar -->
+        <header class="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-8 shadow-sm">
+            <h1 id="page-title" class="text-xl font-bold text-gray-800">Main Dashboard</h1>
+            
+            <div class="flex items-center space-x-4">
+                <span class="text-sm text-gray-600">Logged in as: <strong id="logged-user" class="text-gray-900">Admin</strong></span>
+                <button onclick="handleLogout()" class="text-sm font-semibold text-red-600 hover:text-red-800 transition flex items-center">
+                    <i class="fa-solid fa-right-from-bracket mr-1"></i> Logout
+                </button>
+            </div>
+        </header>
+
+        <!-- Main Body Content -->
+        <main class="p-8">
+
+            <!-- Section 1: Dashboard Overview -->
+            <div id="section-dashboard" class="space-y-6">
+                <!-- Summary Cards -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div class="bg-white p-6 rounded-xl border border-gray-200 shadow-sm flex items-center justify-between">
+                        <div>
+                            <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Total Organizations</p>
+                            <h2 class="text-3xl font-extrabold text-gray-800 mt-2" id="count-orgs">0</h2>
+                        </div>
+                        <div class="bg-blue-50 p-4 rounded-xl text-blue-600">
+                            <i class="fa-solid fa-building text-2xl"></i>
+                        </div>
+                    </div>
+
+                    <div class="bg-white p-6 rounded-xl border border-gray-200 shadow-sm flex items-center justify-between">
+                        <div>
+                            <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider">System Users</p>
+                            <h2 class="text-3xl font-extrabold text-gray-800 mt-2" id="count-users">0</h2>
+                        </div>
+                        <div class="bg-emerald-50 p-4 rounded-xl text-emerald-600">
+                            <i class="fa-solid fa-users text-2xl"></i>
+                        </div>
+                    </div>
+
+                    <div class="bg-white p-6 rounded-xl border border-gray-200 shadow-sm flex items-center justify-between">
+                        <div>
+                            <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Active Queues</p>
+                            <h2 class="text-3xl font-extrabold text-gray-800 mt-2" id="count-queues">0</h2>
+                        </div>
+                        <div class="bg-amber-50 p-4 rounded-xl text-amber-600">
+                            <i class="fa-solid fa-list-ol text-2xl"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Section 2: Placeholder for Organizations & User Modules -->
+            <div id="section-organizations" class="hidden bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+                <h2 class="text-lg font-bold text-gray-800 mb-4">Organization Data Entry Module</h2>
+                <p class="text-gray-500 text-sm">Organization registration form and listing will be loaded here.</p>
+            </div>
+
+            <div id="section-users" class="hidden bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+                <h2 class="text-lg font-bold text-gray-800 mb-4">User Management Module</h2>
+                <p class="text-gray-500 text-sm">User level setup (Admin / Customer) will be loaded here.</p>
+            </div>
+
+        </main>
+    </div>
+
+    <script>
+        // Tab switching function
+        function showSection(sectionName) {
+            document.getElementById('section-dashboard').classList.add('hidden');
+            document.getElementById('section-organizations').classList.add('hidden');
+            document.getElementById('section-users').classList.add('hidden');
+
+            document.getElementById('section-' + sectionName).classList.remove('hidden');
+
+            const titles = {
+                'dashboard': 'Main Dashboard',
+                'organizations': 'Organization Management',
+                'users': 'User Level Management'
+            };
+            document.getElementById('page-title').innerText = titles[sectionName];
+        }
+
+        function handleLogout() {
+            localStorage.removeItem('currentUser');
+            window.location.href = 'index.html';
+        }
+    </script>
+</body>
+</html>

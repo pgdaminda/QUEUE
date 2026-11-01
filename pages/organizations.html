@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Organizations Management - Queue ERP</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen p-6">
+    <div class="max-w-7xl mx-auto">
+        <div class="flex justify-between items-center mb-6">
+            <h1 class="text-2xl font-bold">Organizations Management</h1>
+            <div id="actionBtnContainer">
+                <!-- Add Button (Shown for Master Admin & Admin) -->
+                <button id="addOrgBtn" onclick="openModal('add')" class="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded font-semibold hidden">Add Organization</button>
+            </div>
+        </div>
+
+        <!-- Search Bar -->
+        <div class="mb-6 flex gap-4">
+            <input type="text" id="searchInput" placeholder="Search by Org Code, Name, or Representative..." 
+                   class="bg-gray-800 border border-gray-700 rounded px-4 py-2 w-full max-w-md text-white focus:outline-none focus:border-blue-500"
+                   oninput="fetchOrganizations(1)">
+            <button onclick="window.print()" class="bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded font-semibold">Print Page</button>
+        </div>
+
+        <!-- Organizations Table -->
+        <div class="overflow-x-auto bg-gray-800 rounded-lg shadow border border-gray-700">
+            <table class="w-full text-left border-collapse">
+                <thead>
+                    <tr class="bg-gray-700 text-gray-300 uppercase text-xs">
+                        <th class="p-3">Org Code</th>
+                        <th class="p-3">Organization Name</th>
+                        <th class="p-3">Representative</th>
+                        <th class="p-3">Phone / WhatsApp</th>
+                        <th class="p-3">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="orgTableBody" class="divide-y divide-gray-700">
+                    <!-- Dynamic Data -->
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Pagination -->
+        <div class="flex justify-between items-center mt-6">
+            <span id="pageInfo" class="text-sm text-gray-400">Page 1 of 1</span>
+            <div class="flex gap-2">
+                <button onclick="changePage(-1)" class="bg-gray-700 px-3 py-1 rounded hover:bg-gray-600">Previous</button>
+                <button onclick="changePage(1)" class="bg-gray-700 px-3 py-1 rounded hover:bg-gray-600">Next</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Form -->
+    <div id="orgModal" class="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center hidden">
+        <div class="bg-gray-800 p-6 rounded-lg w-full max-w-lg border border-gray-700">
+            <h2 id="modalTitle" class="text-xl font-bold mb-4">Add Organization</h2>
+            <form id="orgForm" onsubmit="handleFormSubmit(event)">
+                <input type="hidden" id="orgId">
+                <div class="grid grid-cols-2 gap-4 mb-4">
+                    <div>
+                        <label class="block text-sm mb-1">Org Code</label>
+                        <input type="text" id="orgCode" required class="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white">
+                    </div>
+                    <div>
+                        <label class="block text-sm mb-1">Org Name</label>
+                        <input type="text" id="orgName" required class="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white">
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-4 mb-4">
+                    <div>
+                        <label class="block text-sm mb-1">Representative Name</label>
+                        <input type="text" id="repName" class="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white">
+                    </div>
+                    <div>
+                        <label class="block text-sm mb-1">Representative Phone</label>
+                        <input type="text" id="repPhone" class="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white">
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-4 mb-4">
+                    <div>
+                        <label class="block text-sm mb-1">Phone Number</label>
+                        <input type="text" id="phone" class="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white">
+                    </div>
+                    <div>
+                        <label class="block text-sm mb-1">Email</label>
+                        <input type="email" id="email" class="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white">
+                    </div>
+                </div>
+                <div class="mb-4">
+                    <label class="block text-sm mb-1">Address</label>
+                    <textarea id="address" class="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white"></textarea>
+                </div>
+                <div class="flex justify-end gap-2">
+                    <button type="button" onclick="closeModal()" class="bg-gray-600 px-4 py-2 rounded">Cancel</button>
+                    <button type="submit" class="bg-blue-600 px-4 py-2 rounded">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        let currentPage = 1;
+        let totalPages = 1;
+        // උදාහරණයක් ලෙස ලොග් වී සිටින යූසර්ගේ role සහ role එක localStorage මඟින් ලබාගැනීම
+        // උදා: localStorage.setItem('userRole', 'master_admin'); (හෝ 'admin', 'operator')
+        const currentUserRole = localStorage.getItem('userRole') || 'master_admin'; 
+
+        document.addEventListener("DOMContentLoaded", () => {
+            if (currentUserRole === 'master_admin' || currentUserRole === 'admin') {
+                document.getElementById('addOrgBtn').classList.remove('hidden');
+            }
+            fetchOrganizations(1);
+        });
+
+        async function fetchOrganizations(page) {
+            currentPage = page;
+            const search = document.getElementById('searchInput').value;
+            const res = await fetch(`/api/organizations/paginated?page=${page}&search=${search}`);
+            const result = await res.json();
+
+            if (result.success) {
+                const tbody = document.getElementById('orgTableBody');
+                tbody.innerHTML = '';
+                totalPages = result.totalPages;
+                document.getElementById('pageInfo').innerText = `Page ${currentPage} of ${totalPages || 1}`;
+
+                result.data.forEach(org => {
+                    let deleteBtn = '';
+                    if (currentUserRole === 'master_admin') {
+                        deleteBtn = `<button onclick="deleteOrg('${org.id}')" class="text-red-400 hover:text-red-300 ml-2">Delete</button>`;
+                    }
+
+                    let editBtn = '';
+                    if (currentUserRole === 'master_admin' || currentUserRole === 'admin') {
+                        editBtn = `<button onclick='openModal("edit", ${JSON.stringify(org)})' class="text-blue-400 hover:text-blue-300">Edit</button>`;
+                    }
+
+                    tbody.innerHTML += `
+                        <tr class="hover:bg-gray-700/50">
+                            <td class="p-3 font-mono">${org.org_code}</td>
+                            <td class="p-3">${org.org_name}</td>
+                            <td class="p-3">${org.representative_name || '-'}</td>
+                            <td class="p-3">${org.phone_number || '-'}</td>
+                            <td class="p-3">
+                                ${editBtn}
+                                ${deleteBtn}
+                            </td>
+                        </tr>
+                    `;
+                });
+            }
+        }
+
+        function changePage(direction) {
+            let newPage = currentPage + direction;
+            if (newPage >= 1 && newPage <= totalPages) {
+                fetchOrganizations(newPage);
+            }
+        }
+
+        function openModal(mode, org = null) {
+            document.getElementById('orgModal').classList.remove('hidden');
+            if (mode === 'add') {
+                document.getElementById('modalTitle').innerText = 'Add Organization';
+                document.getElementById('orgForm').reset();
+                document.getElementById('orgId').value = '';
+                document.getElementById('orgCode').disabled = false;
+            } else {
+                document.getElementById('modalTitle').innerText = 'Edit Organization';
+                document.getElementById('orgId').value = org.id;
+                document.getElementById('orgCode').value = org.org_code;
+                document.getElementById('orgCode').disabled = true;
+                document.getElementById('orgName').value = org.org_name;
+                document.getElementById('repName').value = org.representative_name || '';
+                document.getElementById('repPhone').value = org.representative_phone || '';
+                document.getElementById('phone').value = org.phone_number || '';
+                document.getElementById('email').value = org.email || '';
+                document.getElementById('address').value = org.address || '';
+            }
+        }
+
+        function closeModal() {
+            document.getElementById('orgModal').classList.add('hidden');
+        }
+
+        async function handleFormSubmit(event) {
+            event.preventDefault();
+            const id = document.getElementById('orgId').value;
+            const payload = {
+                orgCode: document.getElementById('orgCode').value,
+                orgName: document.getElementById('orgName').value,
+                representativeName: document.getElementById('repName').value,
+                representativePhone: document.getElementById('repPhone').value,
+                phoneNumber: document.getElementById('phone').value,
+                email: document.getElementById('email').value,
+                address: document.getElementById('address').value,
+                userRole: currentUserRole
+            };
+
+            const url = id ? `/api/organizations/update/${id}` : '/api/organizations/create';
+            const method = id ? 'PUT' : 'POST';
+
+            const res = await fetch(url, {
+                method: method,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            const result = await res.json();
+            if (result.success) {
+                closeModal();
+                fetchOrganizations(currentPage);
+            } else {
+                alert(result.message);
+            }
+        }
+
+        async function deleteOrg(id) {
+            if (confirm('Are you sure you want to delete this organization?')) {
+                const res = await fetch(`/api/organizations/delete/${id}`, {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ userRole: currentUserRole })
+                });
+                const result = await res.json();
+                if (result.success) {
+                    fetchOrganizations(currentPage);
+                } else {
+                    alert(result.message);
+                }
+            }
+        }
+    </script>
+</body>
+</html>
