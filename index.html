@@ -7,6 +7,8 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- QR Code Library -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <!-- Supabase CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body class="bg-gray-100 text-gray-800 min-h-screen flex">
 
@@ -23,7 +25,7 @@
             <form onsubmit="handleLogin(event)">
                 <div class="mb-4">
                     <label class="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">ORG CODE (LEAVE BLANK IF MASTER ADMIN)</label>
-                    <input type="text" id="orgCode" placeholder="e.g., ORG001 (Optional for Master Admin)" 
+                    <input type="text" id="loginOrgCode" placeholder="e.g., ORG001 (Optional for Master Admin)" 
                            class="w-full bg-gray-700 border border-gray-600 rounded p-3 text-white focus:outline-none focus:border-blue-500">
                 </div>
 
@@ -124,7 +126,7 @@
         </div>
     </div>
 
-    <!-- MODAL FORM (Add / Edit Organization) -->
+    <!-- MODAL FORM -->
     <div id="orgModal" class="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center hidden z-50 p-4">
         <div class="bg-white p-6 rounded-xl w-full max-w-2xl shadow-2xl border border-gray-200 text-gray-800">
             <h2 id="modalTitle" class="text-xl font-bold mb-4 text-gray-900 border-b pb-2">Add Organization</h2>
@@ -132,8 +134,8 @@
                 <input type="hidden" id="orgId">
                 <div class="grid grid-cols-2 gap-4 mb-4">
                     <div>
-                        <label class="block text-xs font-bold uppercase text-gray-600 mb-1">Org Code (Auto Generated)</label>
-                        <input type="text" id="orgCodeInput" disabled class="w-full bg-gray-100 border border-gray-300 rounded-lg p-2.5 text-gray-500 font-mono font-bold">
+                        <label class="block text-xs font-bold uppercase text-gray-600 mb-1">Org Code</label>
+                        <input type="text" id="orgCodeInput" class="w-full bg-gray-100 border border-gray-300 rounded-lg p-2.5 text-gray-700 font-mono font-bold" placeholder="e.g. ORG001" required>
                     </div>
                     <div>
                         <label class="block text-xs font-bold uppercase text-gray-600 mb-1">Org Name</label>
@@ -141,10 +143,9 @@
                     </div>
                 </div>
 
-                <!-- Password Field for Counter Login -->
                 <div class="mb-4" id="passwordContainer">
                     <label class="block text-xs font-bold uppercase text-gray-600 mb-1">Counter Login Password</label>
-                    <input type="password" id="orgPassword" placeholder="Enter password (leave blank to keep unchanged on edit)" class="w-full bg-gray-50 border border-gray-300 rounded-lg p-2.5 focus:outline-none focus:border-blue-500">
+                    <input type="password" id="orgPassword" placeholder="Enter password" class="w-full bg-gray-50 border border-gray-300 rounded-lg p-2.5 focus:outline-none focus:border-blue-500">
                 </div>
 
                 <div class="grid grid-cols-2 gap-4 mb-4">
@@ -208,9 +209,15 @@
     </div>
 
     <script>
+        // Supabase Client Initialization (ඔබගේ Supabase අගයන් මෙහි යොදන්න)
+        const SUPABASE_URL = 'YOUR_SUPABASE_URL';
+        const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
+        const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
         let currentPage = 1;
         let totalPages = 1;
         let currentUserRole = '';
+        let pageSize = 10;
 
         document.addEventListener("DOMContentLoaded", () => {
             const user = localStorage.getItem('currentUser');
@@ -223,27 +230,27 @@
 
         async function handleLogin(event) {
             event.preventDefault();
-            const orgCode = document.getElementById('orgCode').value;
-            const username = document.getElementById('username').value;
+            const username = document.getElementById('username').value.trim();
             const password = document.getElementById('password').value;
             const errorDiv = document.getElementById('errorMessage');
 
             try {
-                const res = await fetch('/api/login', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ orgCode, username, password })
-                });
+                // Supabase users table එකෙන් පරිශීලකයා පරීක්ෂා කිරීම
+                const { data, error } = await supabaseClient
+                    .from('users')
+                    .select('*')
+                    .eq('username', username)
+                    .eq('password', password)
+                    .single();
 
-                const result = await res.json();
-                if (result.success) {
-                    localStorage.setItem('currentUser', JSON.stringify(result.data));
-                    localStorage.setItem('userRole', result.data.role);
-                    currentUserRole = result.data.role;
-                    showAppLayout(result.data);
-                } else {
-                    errorDiv.innerText = result.message;
+                if (error || !data) {
+                    errorDiv.innerText = 'Invalid username or password!';
                     errorDiv.classList.remove('hidden');
+                } else {
+                    localStorage.setItem('currentUser', JSON.stringify(data));
+                    localStorage.setItem('userRole', data.role);
+                    currentUserRole = data.role;
+                    showAppLayout(data);
                 }
             } catch (err) {
                 errorDiv.innerText = 'Connection error!';
@@ -271,22 +278,32 @@
 
         async function fetchOrganizations(page) {
             currentPage = page;
-            const search = document.getElementById('searchInput').value;
-            const res = await fetch(`/api/organizations/paginated?page=${page}&search=${search}`);
-            const result = await res.json();
+            const search = document.getElementById('searchInput').value.trim();
+            
+            let query = supabaseClient.from('organizations').select('*', { count: 'exact' });
 
-            if (result.success) {
+            if (search) {
+                query = query.or(`org_code.ilike.%${search}%,org_name.ilike.%${search}%,representative_name.ilike.%${search}%`);
+            }
+
+            const from = (page - 1) * pageSize;
+            const to = from + pageSize - 1;
+            query = query.range(from, to).order('created_at', { ascending: false });
+
+            const { data, count, error } = await query;
+
+            if (!error) {
                 const tbody = document.getElementById('orgTableBody');
                 tbody.innerHTML = '';
-                totalPages = result.totalPages;
-                document.getElementById('pageInfo').innerText = `Page ${currentPage} of ${totalPages || 1}`;
+                totalPages = Math.ceil(count / pageSize) || 1;
+                document.getElementById('pageInfo').innerText = `Page ${currentPage} of ${totalPages}`;
 
-                if (result.data.length === 0) {
+                if (data.length === 0) {
                     tbody.innerHTML = `<tr><td colspan="5" class="p-6 text-center text-gray-500">No organizations found.</td></tr>`;
                     return;
                 }
 
-                result.data.forEach(org => {
+                data.forEach(org => {
                     let deleteBtn = '';
                     if (currentUserRole === 'master_admin') {
                         deleteBtn = `<button onclick="deleteOrg('${org.id}')" class="text-red-600 hover:text-red-800 font-medium ml-2">Delete</button>`;
@@ -330,22 +347,13 @@
                 document.getElementById('orgForm').reset();
                 document.getElementById('orgId').value = '';
                 document.getElementById('orgPassword').required = true;
-                
-                try {
-                    const res = await fetch('/api/organizations/next-code');
-                    const result = await res.json();
-                    if (result.success) {
-                        document.getElementById('orgCodeInput').value = result.nextCode;
-                    }
-                } catch (err) {
-                    document.getElementById('orgCodeInput').value = 'ORG001';
-                }
+                document.getElementById('orgCodeInput').value = 'ORG00' + Math.floor(Math.random() * 900 + 100);
             } else {
                 document.getElementById('modalTitle').innerText = 'Edit Organization';
                 document.getElementById('orgId').value = org.id;
                 document.getElementById('orgCodeInput').value = org.org_code;
                 document.getElementById('orgName').value = org.org_name;
-                document.getElementById('orgPassword').value = ''; // Blank unless changing
+                document.getElementById('orgPassword').value = '';
                 document.getElementById('orgPassword').required = false;
                 document.getElementById('repName').value = org.representative_name || '';
                 document.getElementById('repPhone').value = org.representative_phone || '';
@@ -364,36 +372,38 @@
             event.preventDefault();
             const id = document.getElementById('orgId').value;
             const payload = {
-                orgName: document.getElementById('orgName').value,
-                password: document.getElementById('orgPassword').value,
-                representativeName: document.getElementById('repName').value,
-                representativePhone: document.getElementById('repPhone').value,
-                phoneNumber: document.getElementById('phone').value,
-                whatsappNumber: document.getElementById('whatsapp').value,
+                org_code: document.getElementById('orgCodeInput').value,
+                org_name: document.getElementById('orgName').value,
+                representative_name: document.getElementById('repName').value,
+                representative_phone: document.getElementById('repPhone').value,
+                phone_number: document.getElementById('phone').value,
+                whatsapp_number: document.getElementById('whatsapp').value,
                 email: document.getElementById('email').value,
-                address: document.getElementById('address').value,
-                userRole: currentUserRole
+                address: document.getElementById('address').value
             };
 
-            const url = id ? `/api/organizations/update/${id}` : '/api/organizations/create';
-            const method = id ? 'PUT' : 'POST';
+            const password = document.getElementById('orgPassword').value;
+            if (password) {
+                payload.password = password;
+            }
 
-            const res = await fetch(url, {
-                method: method,
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
+            let error;
+            if (id) {
+                const { error: err } = await supabaseClient.from('organizations').update(payload).eq('id', id);
+                error = err;
+            } else {
+                const { error: err } = await supabaseClient.from('organizations').insert([payload]);
+                error = err;
+            }
 
-            const result = await res.json();
-            if (result.success) {
+            if (!error) {
                 closeModal();
                 fetchOrganizations(currentPage);
             } else {
-                alert(result.message);
+                alert('Error saving organization: ' + error.message);
             }
         }
 
-        // VIEW ORG DETAILS
         function viewOrg(org) {
             document.getElementById('viewModal').classList.remove('hidden');
             document.getElementById('viewDetailsContent').innerHTML = `
@@ -413,7 +423,6 @@
             document.getElementById('viewModal').classList.add('hidden');
         }
 
-        // PRINT ORG DETAILS
         function printOrg(org) {
             const printWindow = window.open('', '_blank');
             printWindow.document.write(`
@@ -437,7 +446,6 @@
             printWindow.document.close();
         }
 
-        // QR CODE MODAL & DOWNLOAD
         let currentQR = null;
         function openQRModal(orgCode, orgName) {
             document.getElementById('qrModal').classList.remove('hidden');
@@ -476,16 +484,11 @@
 
         async function deleteOrg(id) {
             if (confirm('Are you sure you want to delete this organization?')) {
-                const res = await fetch(`/api/organizations/delete/${id}`, {
-                    method: 'DELETE',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ userRole: currentUserRole })
-                });
-                const result = await res.json();
-                if (result.success) {
+                const { error } = await supabaseClient.from('organizations').delete().eq('id', id);
+                if (!error) {
                     fetchOrganizations(currentPage);
                 } else {
-                    alert(result.message);
+                    alert('Error deleting organization: ' + error.message);
                 }
             }
         }
